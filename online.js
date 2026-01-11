@@ -8,7 +8,7 @@
       title: 'Источник A',
       getIframe: function (movie) {
         // пример логики
-        return 'https://example.com/embed?title=' +
+        return 'https://multiembed.mov/?video_id=tt1234567' +
           encodeURIComponent(movie.title) +
           '&year=' + movie.year;
       }
@@ -58,3 +58,4 @@
     }
   });
 })();
+
