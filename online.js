@@ -1,119 +1,67 @@
 (function () {
   'use strict';
 
-  var plugin_name = 'Free Embed Players 2026';
+  var plugin = 'Free Online Cinema';
 
-  // Список источников (можно добавлять/убирать)
   var sources = [
     {
-      title: 'MultiEmbed (основной)',
-      getUrl: function (movie, season, episode) {
-        var id = movie.imdb_id || movie.imdb || '';
-        if (!id) return null;
-        var url = 'https://multiembed.mov/?video_id=' + id;
-        if (season && episode) url += '&s=' + season + '&e=' + episode;
+      title: 'MultiEmbed (самый стабильный сейчас)',
+      getIframe: function (movie) {
+        var imdb = movie.imdb_id || movie.imdb || '';
+        if (!imdb) return 'https://via.placeholder.com/1280x720?text=Нет+IMDB';
+
+        var url = 'https://multiembed.mov/?video_id=' + imdb;
+        
+        // если сериал и есть сезон/серия (Lampa обычно передаёт в activity)
+        if (movie.season && movie.episode) {
+          url += '&s=' + movie.season + '&e=' + movie.episode;
+        }
+        
         return url;
       }
     },
-    {
-      title: 'SuperEmbed',
-      getUrl: function (movie, season, episode) {
-        var id = movie.imdb_id || movie.imdb || '';
-        if (!id) return null;
-        id = id.replace('tt', '');
-        var url = 'https://superembed.stream/embed/movie/' + id;
-        if (season && episode) url = 'https://superembed.stream/embed/tv/' + id + '/' + season + '/' + episode;
-        return url;
-      }
-    },
+    
+    // запасной — autoembed (часто живее, когда multiembed тормозит)
     {
       title: 'AutoEmbed',
-      getUrl: function (movie, season, episode) {
-        var id = movie.imdb_id || movie.imdb || '';
-        if (!id) return null;
-        var url = 'https://autoembed.co/movie/imdb/' + id.replace('tt', '');
-        if (season && episode) url = 'https://autoembed.co/tv/imdb/' + id.replace('tt', '') + '/' + season + '/' + episode;
-        return url;
-      }
-    },
-    {
-      title: 'VidSrc.to',
-      getUrl: function (movie, season, episode) {
-        var id = movie.tmdb_id || movie.tmdb || '';
-        if (!id) return null;
-        var url = 'https://vidsrc.to/embed/movie/' + id;
-        if (season && episode) url = 'https://vidsrc.to/embed/tv/' + id + '/' + season + '/' + episode;
-        return url;
+      getIframe: function (movie) {
+        var imdb = movie.imdb_id || movie.imdb || '';
+        if (!imdb) return null;
+        return 'https://autoembed.co/embed/movie/' + imdb.replace('tt', '');
       }
     }
   ];
 
-  var current_index = 0;
-
-  function playCurrent(movie, season, episode) {
-    if (current_index >= sources.length) {
-      Lampa.Modal.open({
-        title: 'Ошибка',
-        html: '<p>Все источники не сработали :( Попробуй позже или другой контент.</p>',
-        onBack: function () { Lampa.Activity.pop(); }
-      });
-      return;
-    }
-
-    var source = sources[current_index];
-    var url = source.getUrl(movie, season, episode);
-
-    if (!url) {
-      current_index++;
-      playCurrent(movie, season, episode);
-      return;
-    }
-
-    Lampa.Player.launch({
-      url: url,
-      type: 'iframe',
-      title: movie.title + (season ? ' (S' + season + ' E' + episode + ')' : ''),
-      onError: function () {
-        current_index++;
-        playCurrent(movie, season, episode); // авто-переход на следующий
-      }
-    });
-
-    // Обновляем заголовок активности
-    Lampa.Activity.active().title = source.title + ' (' + (current_index + 1) + '/' + sources.length + ')';
-  }
-
-  Lampa.Component.add(plugin_name, {
-    name: plugin_name,
+  Lampa.Component.add(plugin, {
+    name: plugin,
     type: 'video',
 
     onCreate: function () {
       this.movie = this.activity.movie || {};
-      this.season = this.activity.season || 1;
-      this.episode = this.activity.episode || 1;
+      this.activity.render({
+        title: 'Выберите источник',
+        items: sources.map((s, i) => ({
+          title: s.title,
+          index: i,
+          template: 'button'
+        }))
+      });
 
-      current_index = 0; // сбрасываем при новом запуске
+      this.activity.select = function(item) {
+        var source = sources[item.index];
+        var url = source.getIframe(this.movie);
 
-      // Добавляем кнопку "Следующий плеер"
-      this.activity.buttons = [
-        {
-          title: 'Следующий плеер',
-          action: function () {
-            current_index++;
-            playCurrent(this.movie, this.season, this.episode);
-          }.bind(this)
+        if (!url) {
+          Lampa.Noty.show('Нет нужного ID для этого источника');
+          return;
         }
-      ];
 
-      playCurrent(this.movie, this.season ? this.season : null, this.episode ? this.episode : null);
+        Lampa.Player.play({
+          url: url,
+          type: 'iframe',
+          title: this.movie.title
+        });
+      }.bind(this);
     }
   });
-
-  // Автозапуск при выборе "Онлайн" в карточке
-  Lampa.Listener.follow('full', function (e) {
-    if (e.type == 'online' && e.body && e.body.component == plugin_name) {
-      e.body.component = plugin_name;
-    }
-  });
-
 })();
